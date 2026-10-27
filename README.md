@@ -8,7 +8,8 @@ Ontologie OWL (Protégé) → backend **Python + Flask + RDFLib** → frontend *
 # 1. Backend (http://localhost:5000)
 cd backend
 pip install -r requirements.txt
-python -m spacy download fr_core_news_sm   # modèle français pour le module NLP
+python -m spacy download fr_core_news_sm   # modèle français pour les modules NLP
+python scripts/verifier_hermit.py           # optionnel : cohérence HermiT (pip install owlready2, Java)
 python app.py
 
 # 2. Frontend (http://localhost:4200) — dans un autre terminal
@@ -32,12 +33,12 @@ Le frontend appelle `/api/...` ; `frontend/proxy.conf.json` redirige vers Flask 
 | Membre | Module | Backend | Frontend |
 |---|---|---|---|
 | 1 · Wala Rezgui | Production | `backend/modules/production/` | `frontend/src/app/pages/production/` |
-| 2 · Takoua Naceur | Stockage | `backend/modules/stockage/` | `frontend/src/app/pages/stockage/` |
+| 2 · Takoua Naceur | Stockage ✅ | `backend/modules/stockage/` | `frontend/src/app/pages/stockage/` |
 | 3 · Abir Mosrati | Bâtiments | `backend/modules/batiments/` | `frontend/src/app/pages/batiments/` |
 | 4 · Nourane Lammouchi | Réseau ✅ | `backend/modules/reseau/` | `frontend/src/app/pages/reseau/` |
 | 5 · Ibtihel Mechergui | Mesure | `backend/modules/mesure/` | `frontend/src/app/pages/mesure/` |
 
-Le module **Réseau** est complet et sert d'exemple :
+Les modules **Réseau** et **Stockage** sont complets ; Réseau sert d'exemple :
 
 - `queries.py` — toutes les requêtes SPARQL (SELECT avec filtres, agrégats, INSERT DATA, DELETE/INSERT, DELETE WHERE, ASK) ;
 - `routes.py` — le Blueprint Flask (`/api/reseau/...`) ;
@@ -87,3 +88,56 @@ aux individus de l'ontologie (libellés, identifiants, villes).
 Règles : intention (lister, compter, max, min, somme, moyenne, existe), classe cible, catégorie HT/MT/BT,
 comparaisons numériques avec unités (kV, km, MVA, années), relations (connexion, secours, R3, R4)
 → requête SPARQL générée puis exécutée par RDFLib.
+
+
+## API Stockage
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/api/stockage/systemes?q=&famille=&definie=vert\|critique\|grande\|secours&niveauMin=&niveauMax=&capaciteMin=&source=&batiment=&poste=` | Liste filtrée + classes définies déduites + énergie disponible et autonomie |
+| GET | `/api/stockage/systemes/<id>` | Détail + tous les triplets RDF de l'individu |
+| POST / PUT / DELETE | `/api/stockage/systemes[/<id>]` | CRUD (`?force=true` pour supprimer malgré les dépendances) |
+| PATCH | `/api/stockage/systemes/<id>/niveau` `{ "niveau": 35 }` | Recharge / décharge : DELETE/INSERT sur `niveauCharge` (fonctionnelle) |
+| GET | `/api/stockage/stats` | COUNT / SUM / AVG, effectifs par famille et par classe définie |
+| GET | `/api/stockage/batiments` | Bâtiments, `possedeStockage` (R2), sources renouvelables (direct, inverse, R1, R6), `BatimentAutonome` |
+| GET | `/api/stockage/scenario?poste=&heures=` | Scénario coupure : bâtiments desservis (R3) et autonomie grâce à leur stockage (R2) |
+| POST | `/api/stockage/scenario/appliquer` `{ "poste": "...", "heures": 4 }` | Applique la coupure : décharge les stockages (SPARQL UPDATE) |
+| POST | `/api/stockage/nlp` `{ "question": "..." }` | Question en français → spaCy → SPARQL → résultats |
+| GET | `/api/stockage/nlp/exemples` | Questions d'exemple |
+
+Les POST/PUT invalides renvoient **422** avec une erreur par champ ; chaque règle cite l'axiome qu'elle applique.
+
+## Stockage : ontologie enrichie
+
+`backend/scripts/enrichir_stockage.py` a ajouté à `SmartGrid-1.owl` (sauvegarde dans `backups/`, ne refait rien s'il a déjà tourné) :
+
+- **Classes** : `BatteriePlomb ⊑ Batterie` (disjointe de `BatterieLithiumIon`), `VolantInertie ⊑ SystemeStockage` ;
+  Batterie / StockageHydrogene / STEP / VolantInertie deux à deux disjointes
+- **4 classes définies** :
+  `StockageVert ≡ SystemeStockage ⊓ stockeEnergieDe some SourceRenouvelable` ·
+  `StockageCritique ≡ SystemeStockage ⊓ niveauCharge some float[< 20]` ·
+  `StockageGrandeCapacite ≡ SystemeStockage ⊓ capaciteStockage some float[≥ 10000]` ·
+  `StockageSecours ≡ SystemeStockage ⊓ alimente some BatimentPublic`
+- **Axiomes** : `SystemeStockage ⊑ niveauCharge only float[≥ 0, ≤ 100]` · `SystemeStockage ⊑ rendement only float[> 0, ≤ 100]` ·
+  `StockageHydrogene ⊑ stockeEnergieDe some SourceRenouvelable` · `VolantInertie ⊑ raccordeAuPoste exactly 1 PosteElectrique`
+- **ObjectProperty** : `estStockePar` (inverse de `stockeEnergieDe`), `raccordeAuPoste` (fonctionnelle, vers `PosteElectrique`)
+- **DataProperty** (fonctionnelles) : `rendement` (%), `puissanceDecharge` (kW), `technologie`, `anneeInstallation` ; `niveauCharge` devient fonctionnelle
+- **Règle SWRL R6** : `SystemeStockage(?x) ^ stockeEnergieDe(?x, ?s) ^ alimente(?x, ?b) → estAlimentePar(?b, ?s)`
+  (un bâtiment alimenté par un stockage l'est indirectement par la source stockée : Immeuble_Lac et Ecole_Ariana deviennent `BatimentAutonome`)
+- **Individus** : 4 nouveaux (Batterie_Ecole_Ariana, Batterie_Immeuble_Lac, Volant_Rades, Batterie_Reseau_Tozeur) et données complétées pour les 5 existants, soit 9 systèmes
+
+Vérifié avec HermiT (`scripts/verifier_hermit.py`) : ontologie cohérente, 0 classe insatisfiable.
+
+## Stockage : module NLP → SPARQL (sans API de LLM)
+
+`backend/modules/stockage/nlp.py`, outils utilisés :
+
+- **spaCy 3.8** + modèle **`fr_core_news_sm`** : tokenisation, lemmatisation, étiquettes POS, **NER** (entités `LOC` pour les lieux) ;
+- **`PhraseMatcher`** de spaCy : relie les mots aux individus (libellés, identifiants, alias non ambigus) et au vocabulaire
+  des classes (« lithium » → `BatterieLithiumIon`, « à recharger » → `StockageCritique`, « non renouvelable » → ¬`StockageVert`) ;
+- **`Matcher`** de spaCy (motifs de tokens) : quantités avec unités et conversion (« 10 MWh » → 10 000 kWh, « 1 MW », « 20 % »),
+  intervalles « entre 100 et 1000 kWh ».
+
+Règles : intention (lister, compter, somme, moyenne, max, min, existe), cible (stockages, bâtiments, sources),
+superlatifs (« la plus chargée », « meilleur rendement »), comparaisons, années → requête SPARQL (avec les classes
+définies et les règles R2, R6, R1, R3 réécrites) exécutée par RDFLib.
