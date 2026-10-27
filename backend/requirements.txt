@@ -1,0 +1,5 @@
+flask>=3.0
+flask-cors>=4.0
+rdflib>=7.0
+spacy>=3.8
+# puis : python -m spacy download fr_core_news_sm
