@@ -1,0 +1,496 @@
+<div class="page">
+  <!-- ======================================================= en-tête -->
+  <header class="head">
+    <div>
+      <p class="eyebrow">Membre {{ d.numero }} · {{ d.membre }}</p>
+      <h1 class="page-title">{{ d.title }}</h1>
+      <p class="page-sub">{{ d.description }}</p>
+    </div>
+    <span class="tile"><app-icon name="gauge" [size]="34" [stroke]="1.6" /></span>
+  </header>
+
+  <!-- ======================================================= stats -->
+  <section class="stats">
+    @if (stats(); as s) {
+      <article class="card stat">
+        <span class="k">Compteurs intelligents</span>
+        <strong>{{ s.compteurs }}</strong>
+      </article>
+      <article class="card stat">
+        <span class="k">Mesures</span>
+        <strong>{{ s.consommations + s.productions }}</strong>
+        <div class="split">
+          @if (s.consommations) { <i [style.flex]="s.consommations" [style.background]="types.consommation.color"></i> }
+          @if (s.productions) { <i [style.flex]="s.productions" [style.background]="types.production.color"></i> }
+        </div>
+        <span class="legend">
+          <span><b [style.background]="types.consommation.color"></b>Consommation {{ s.consommations }}</span>
+          <span><b [style.background]="types.production.color"></b>Production {{ s.productions }}</span>
+        </span>
+      </article>
+      <article class="card stat">
+        <span class="k">Opérateurs réseau</span>
+        <strong>{{ s.operateurs }}</strong>
+      </article>
+    } @else {
+      @for (i of [1, 2, 3]; track i) {
+        <article class="card stat">
+          <span class="skeleton" style="width: 60%; height: 12px"></span>
+          <span class="skeleton" style="width: 40%; height: 34px; margin-top: 6px"></span>
+        </article>
+      }
+    }
+  </section>
+
+  <!-- ======================================================= onglets -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" [attr.aria-selected]="tab() === 'compteurs'" [class.on]="tab() === 'compteurs'" (click)="setTab('compteurs')">
+      <app-icon name="gauge" [size]="16" /> Compteurs
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'mesures'" [class.on]="tab() === 'mesures'" (click)="setTab('mesures')">
+      <app-icon name="table" [size]="16" /> Mesures
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'operateurs'" [class.on]="tab() === 'operateurs'" (click)="setTab('operateurs')">
+      <app-icon name="pylon" [size]="16" /> Opérateurs
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'bilan'" [class.on]="tab() === 'bilan'" (click)="setTab('bilan')">
+      <app-icon name="graph" [size]="16" /> Bilan
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'question'" [class.on]="tab() === 'question'" (click)="setTab('question')">
+      <app-icon name="code" [size]="16" /> Question (NLP)
+    </button>
+  </nav>
+
+  <!-- ======================================================= COMPTEURS -->
+  @if (tab() === 'compteurs') {
+    <section class="card panel">
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Rechercher un compteur…" [value]="qCompteurs()"
+                 (input)="rechercher(qCompteurs, $any($event.target).value, 'compteurs')">
+        </label>
+        <select class="input" [value]="batimentFiltre()" (change)="batimentFiltre.set($any($event.target).value); loadCompteurs()" aria-label="Filtrer par bâtiment">
+          <option value="">Tous les bâtiments</option>
+          @for (b of options()?.batiments ?? []; track b.id) { <option [value]="b.id">{{ b.label }}</option> }
+        </select>
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="compteurForm.set({ compteur: null })">
+          <app-icon name="plus" [size]="16" /> Nouveau compteur
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>Compteur</th><th>sg:identifiant</th><th>Installé dans</th><th class="num">Mesures</th><th></th></tr>
+          </thead>
+          <tbody>
+            @if (compteurs(); as list) {
+              @for (c of list; track c.id) {
+                <tr class="clickable" (click)="ouvrirCompteur(c)">
+                  <td><div class="name">{{ c.label }}</div><div class="id mono">sg:{{ c.id }}</div></td>
+                  <td class="mono">{{ c.identifiant ?? '—' }}</td>
+                  <td>
+                    <div class="tags">
+                      @for (b of c.batiments; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> }
+                      @if (c.nbBatiments !== 1) {
+                        <span class="badge" [style.--c]="'var(--danger)'" title="installeDans exactly 1 Batiment">{{ c.nbBatiments }} bâtiment(s) ⚠</span>
+                      }
+                    </div>
+                  </td>
+                  <td class="num mono">{{ c.nbMesures }}</td>
+                  <td class="actions" (click)="$event.stopPropagation()">
+                    <button class="btn icon ghost" title="Modifier" (click)="compteurForm.set({ compteur: c })"><app-icon name="edit" [size]="16" /></button>
+                    <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression('compteur', c)"><app-icon name="trash" [size]="16" /></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="empty">Aucun compteur ne correspond.</td></tr>
+              }
+            } @else {
+              @for (i of skeletonRows; track i) {
+                <tr>
+                  <td><span class="skeleton" style="width: 160px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 70px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 100px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 30px; height: 14px"></span></td>
+                  <td></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= MESURES -->
+  @if (tab() === 'mesures') {
+    <section class="card panel">
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Rechercher une mesure…" [value]="qMesures()"
+                 (input)="rechercher(qMesures, $any($event.target).value, 'mesures')">
+        </label>
+        <div class="seg" role="radiogroup" aria-label="Type de mesure">
+          <button [class.on]="type() === ''" (click)="type.set(''); loadMesures()">Toutes</button>
+          @for (t of typeKeys; track t) {
+            <button [class.on]="type() === t" (click)="type.set(t); loadMesures()" [title]="types[t].classe">{{ types[t].label }}</button>
+          }
+        </div>
+        <select class="input" [value]="compteurFiltre()" (change)="compteurFiltre.set($any($event.target).value); loadMesures()" aria-label="Filtrer par compteur">
+          <option value="">Tous les compteurs</option>
+          @for (c of options()?.compteurs ?? []; track c.id) { <option [value]="c.id">{{ c.label }}</option> }
+        </select>
+        <select class="input" [value]="cible()" (change)="cible.set($any($event.target).value); loadMesures()" aria-label="Filtrer par cible">
+          <option value="">Toutes les cibles</option>
+          <optgroup label="Bâtiments (assertion ou R5)">
+            @for (b of options()?.batiments ?? []; track b.id) { <option [value]="b.id">{{ b.label }}</option> }
+          </optgroup>
+          <optgroup label="Sources d'énergie">
+            @for (s of options()?.sources ?? []; track s.id) { <option [value]="s.id">{{ s.label }}</option> }
+          </optgroup>
+        </select>
+      </div>
+      <div class="toolbar second">
+        <div class="range">
+          <input class="input" type="number" min="0" placeholder="kWh min" aria-label="Valeur minimale"
+                 [value]="valeurMin() ?? ''" (input)="setNombre('min', $any($event.target).value)">
+          <span>–</span>
+          <input class="input" type="number" min="0" placeholder="kWh max" aria-label="Valeur maximale"
+                 [value]="valeurMax() ?? ''" (input)="setNombre('max', $any($event.target).value)">
+        </div>
+        <div class="range dates">
+          <input class="input" type="date" aria-label="Début de période" [value]="debut()" (change)="setPeriode('debut', $any($event.target).value)">
+          <span>→</span>
+          <input class="input" type="date" aria-label="Fin de période" [value]="fin()" (change)="setPeriode('fin', $any($event.target).value)">
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Règle de sélection temporelle">
+          <button [class.on]="mode() === 'chevauchement'" (click)="mode.set('chevauchement'); loadMesures()"
+                  title="La période de la mesure touche l'intervalle">Chevauche</button>
+          <button [class.on]="mode() === 'inclusion'" (click)="mode.set('inclusion'); loadMesures()"
+                  title="La mesure est entièrement dans l'intervalle">Incluse</button>
+        </div>
+        @if (filtresMesures()) { <button class="btn ghost" (click)="resetFiltres()">Réinitialiser</button> }
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options() || !compteurs()" (click)="mesureForm.set({ mesure: null })">
+          <app-icon name="plus" [size]="16" /> Nouvelle mesure
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>Mesure</th><th>Type</th><th class="num">Valeur</th><th>Période</th><th>Compteur</th><th>Concerne</th><th></th></tr>
+          </thead>
+          <tbody>
+            @if (mesures(); as list) {
+              @for (m of list; track m.id) {
+                <tr class="clickable" (click)="ouvrirMesure(m)">
+                  <td><div class="name">{{ m.label }}</div><div class="id mono">sg:{{ m.id }}</div></td>
+                  <td>
+                    @if (m.type !== 'indeterminee') {
+                      <span class="badge" [style.--c]="types[m.type].color" [title]="types[m.type].axiome">{{ types[m.type].label }}</span>
+                    } @else { <span class="muted">—</span> }
+                  </td>
+                  <td class="num mono">{{ fmtKWh(m.valeur) }}</td>
+                  <td class="mono nowrap">{{ fmtDate(m.debut) }} → {{ fmtDate(m.fin) }}</td>
+                  <td>
+                    @for (c of m.compteurs; track c) { <span class="badge" [style.--c]="'var(--mesure)'">{{ label(c) }}</span> }
+                    @empty { <span class="muted">—</span> }
+                  </td>
+                  <td>
+                    <div class="tags">
+                      @for (c of m.cibles; track c.id + c.via) {
+                        <span class="badge" [style.--c]="m.type === 'production' ? 'var(--production)' : 'var(--batiments)'"
+                              [title]="c.via === 'R5' ? 'Déduit par la règle R5' : 'concerne asserté'">
+                          {{ label(c.id) }} @if (c.via === 'R5') { <small class="mono">R5</small> }
+                        </span>
+                      } @empty { <span class="muted">—</span> }
+                    </div>
+                  </td>
+                  <td class="actions" (click)="$event.stopPropagation()">
+                    <button class="btn icon ghost" title="Modifier" (click)="mesureForm.set({ mesure: m })"><app-icon name="edit" [size]="16" /></button>
+                    <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression('mesure', m)"><app-icon name="trash" [size]="16" /></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="empty">
+                  {{ filtresMesures() ? 'Aucune mesure ne correspond à ces filtres.' : "Aucune mesure dans l'ontologie." }}
+                </td></tr>
+              }
+            } @else {
+              @for (i of skeletonRows; track i) {
+                <tr>
+                  <td><span class="skeleton" style="width: 180px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 90px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 60px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 150px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 90px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 90px; height: 20px; border-radius: 99px"></span></td>
+                  <td></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (debut() || fin()) {
+        <p class="rule">
+          Période : {{ mode() === 'inclusion' ? "mesures entièrement comprises dans l'intervalle" : "mesures dont la période chevauche l'intervalle" }}.
+        </p>
+      }
+    </section>
+  }
+
+  <!-- ======================================================= OPÉRATEURS -->
+  @if (tab() === 'operateurs') {
+    <section class="panel-plain">
+      <div class="toolbar bare">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Rechercher un opérateur…" [value]="qOperateurs()"
+                 (input)="rechercher(qOperateurs, $any($event.target).value, 'operateurs')">
+        </label>
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="operateurForm.set({ operateur: null })">
+          <app-icon name="plus" [size]="16" /> Nouvel opérateur
+        </button>
+      </div>
+
+      <div class="cards">
+        @if (operateurs(); as list) {
+          @for (o of list; track o.id) {
+            <article class="card op">
+              <header>
+                <span class="ptile"><app-icon name="pylon" [size]="20" /></span>
+                <div class="grow">
+                  <h3>{{ o.label }}</h3>
+                  <span class="id mono">sg:{{ o.id }}</span>
+                </div>
+                <button class="btn icon ghost" title="Modifier" (click)="operateurForm.set({ operateur: o })"><app-icon name="edit" [size]="16" /></button>
+                <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression('operateur', o)"><app-icon name="trash" [size]="16" /></button>
+              </header>
+              <dl>
+                <dt>gere <small class="mono">asserté</small></dt>
+                <dd>
+                  @for (g of o.gere; track g) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(g) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+                <dt>Lignes gérées <small class="mono">R4</small></dt>
+                <dd>
+                  @for (l of o.lignesR4; track l) { <span class="badge" [style.--c]="'var(--reseau)'" title="Déduit par R4">{{ label(l) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+              </dl>
+            </article>
+          } @empty {
+            <p class="empty card">Aucun opérateur trouvé.</p>
+          }
+        } @else {
+          @for (i of [1, 2]; track i) {
+            <article class="card op">
+              <span class="skeleton" style="width: 60%; height: 18px"></span>
+              <span class="skeleton" style="width: 100%; height: 70px; margin-top: 8px"></span>
+            </article>
+          }
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= BILAN -->
+  @if (tab() === 'bilan') {
+    <section class="card panel pad bilan">
+      <div class="toolbar bare">
+        <div class="range dates">
+          <input class="input" type="date" aria-label="Début du bilan" [value]="bilanDebut()" (change)="bilanDebut.set($any($event.target).value)">
+          <span>→</span>
+          <input class="input" type="date" aria-label="Fin du bilan" [value]="bilanFin()" (change)="bilanFin.set($any($event.target).value)">
+        </div>
+        <button class="btn primary" (click)="loadBilan()"><app-icon name="refresh" [size]="16" /> Calculer</button>
+        @if (bilanDebut() || bilanFin()) {
+          <button class="btn ghost" (click)="bilanDebut.set(''); bilanFin.set(''); loadBilan()">Toute la période</button>
+        }
+      </div>
+
+      @if (bilan(); as b) {
+        <p class="rule"><app-icon name="alert" [size]="14" /> {{ b.regle }}</p>
+        <div class="totaux">
+          @for (t of typeKeys; track t) {
+            <article class="total" [style.--c]="types[t].color">
+              <span class="k">{{ types[t].label }} totale</span>
+              <strong>{{ fmtKWh(b.totaux[t].totalKWh) }}</strong>
+              <span class="muted">{{ b.totaux[t].nombre }} mesure{{ b.totaux[t].nombre > 1 ? 's' : '' }} incluse{{ b.totaux[t].nombre > 1 ? 's' : '' }}</span>
+              <div class="bars">
+                @for (x of parType(b, t); track x.cible) {
+                  <div class="bar-row">
+                    <span class="bl">{{ label(x.cible) }} @if (x.via === 'R5') { <small class="mono">R5</small> }</span>
+                    <span class="bt"><i [style.width.%]="100 * x.totalKWh / maxCible(b, t)"></i></span>
+                    <span class="bv mono">{{ fmtKWh(x.totalKWh) }}</span>
+                  </div>
+                } @empty { <span class="muted">Aucune mesure incluse.</span> }
+              </div>
+            </article>
+          }
+        </div>
+
+        @if (b.exclues.length) {
+          <div class="warn-box">
+            <strong>{{ b.exclues.length }} mesure(s) chevauchent la période sans y être incluses : non comptées.</strong>
+            <ul>@for (m of b.exclues; track m.id) { <li>{{ label(m.id) }} · {{ fmtDate(m.debut) }} → {{ fmtDate(m.fin) }}</li> }</ul>
+          </div>
+        }
+        @if (b.chevauchements.length) {
+          <div class="warn-box">
+            <strong>Des mesures de même type et de même cible se chevauchent : leur somme peut compter deux fois la même énergie.</strong>
+            <ul>@for (p of b.chevauchements; track p.m1 + p.m2) { <li>{{ label(p.m1) }} / {{ label(p.m2) }} ({{ label(p.cible) }})</li> }</ul>
+          </div>
+        }
+
+        <h3 class="sub">Contrôle des axiomes du module</h3>
+        @if (anomalies(); as an) {
+          @for (a of an; track a.id + a.probleme) {
+            <p class="anomalie"><app-icon name="alert" [size]="14" /> <span class="mono">sg:{{ a.id }}</span> · {{ a.probleme }} @if (a.detail) { ({{ a.detail }}) }</p>
+          } @empty {
+            <p class="ok"><app-icon name="check" [size]="14" /> Aucune anomalie : chaque compteur a un seul bâtiment, chaque mesure de consommation au plus un bâtiment (assertion + R5), cibles et dates cohérentes.</p>
+          }
+        }
+      } @else {
+        <span class="skeleton" style="width: 100%; height: 220px"></span>
+      }
+    </section>
+  }
+
+  <!-- ======================================================= NLP -->
+  @if (tab() === 'question') {
+    <section class="card panel pad">
+      <app-mesure-nlp />
+    </section>
+  }
+
+  @if (tab() !== 'question') {
+    <app-sparql-panel [query]="sparql()" />
+  }
+</div>
+
+<!-- ========================================================= modales -->
+@if (compteurForm(); as f) {
+  <app-compteur-form [compteur]="f.compteur" [options]="options()!" (saved)="onSaved('compteur', !!f.compteur)" (closed)="compteurForm.set(null)" />
+}
+@if (mesureForm(); as f) {
+  <app-mesure-form [mesure]="f.mesure" [options]="options()!" [compteurs]="compteurs() ?? []"
+                   (saved)="onSaved('mesure', !!f.mesure)" (closed)="mesureForm.set(null)" />
+}
+@if (operateurForm(); as f) {
+  <app-operateur-form [operateur]="f.operateur" [options]="options()!" (saved)="onSaved('operateur', !!f.operateur)" (closed)="operateurForm.set(null)" />
+}
+
+@if (detailCompteur(); as c) {
+  <div class="backdrop" (click)="detailCompteur.set(null)">
+    <div class="modal detail" (click)="$event.stopPropagation()" (keydown.escape)="detailCompteur.set(null)">
+      <header class="m-head">
+        <div>
+          <p class="eyebrow">CompteurIntelligent · sg:{{ c.id }}</p>
+          <h2>{{ c.label }}</h2>
+        </div>
+        <button class="btn icon ghost" (click)="detailCompteur.set(null)" aria-label="Fermer"><app-icon name="close" /></button>
+      </header>
+      <div class="m-body">
+        <div class="facts">
+          <div><span>sg:identifiant</span><strong class="mono">{{ c.identifiant ?? '—' }}</strong></div>
+          <div><span>installeDans</span><strong>{{ c.batiments.length ? label(c.batiments[0]) : '—' }}</strong></div>
+          <div><span>Mesures enregistrées</span><strong class="mono">{{ c.nbMesures }}</strong></div>
+        </div>
+        <p class="eyebrow">enregistre</p>
+        @if (c.detailMesures; as ms) {
+          <ul class="mlist">
+            @for (m of ms; track m.id) {
+              <li>
+                <span class="badge" [style.--c]="m.type === 'production' ? 'var(--production)' : 'var(--batiments)'">{{ m.type }}</span>
+                <span class="grow">{{ m.label }}</span>
+                <span class="mono">{{ fmtKWh(m.valeur) }}</span>
+              </li>
+            } @empty { <li class="muted">Aucune mesure enregistrée.</li> }
+          </ul>
+        } @else { <span class="skeleton" style="width: 100%; height: 60px"></span> }
+      </div>
+      <footer class="m-foot">
+        <button class="btn del-text" (click)="demanderSuppression('compteur', c)"><app-icon name="trash" [size]="16" /> Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn" [disabled]="!c.nbMesures" (click)="voirMesuresDuCompteur(c.id)">Voir ses mesures →</button>
+        <button class="btn primary" (click)="compteurForm.set({ compteur: c }); detailCompteur.set(null)"><app-icon name="edit" [size]="16" /> Modifier</button>
+      </footer>
+    </div>
+  </div>
+}
+
+@if (detailMesure(); as m) {
+  <div class="backdrop" (click)="detailMesure.set(null)">
+    <div class="modal detail" (click)="$event.stopPropagation()" (keydown.escape)="detailMesure.set(null)">
+      <header class="m-head">
+        <div>
+          <p class="eyebrow">{{ m.type === 'indeterminee' ? 'Mesure' : types[m.type].classe }} · sg:{{ m.id }}</p>
+          <h2>{{ m.label }}</h2>
+        </div>
+        <button class="btn icon ghost" (click)="detailMesure.set(null)" aria-label="Fermer"><app-icon name="close" /></button>
+      </header>
+      <div class="m-body">
+        <div class="facts">
+          <div><span>valeurKWh</span><strong class="mono">{{ fmtKWh(m.valeur) }}</strong></div>
+          <div><span>dateDebut</span><strong class="mono">{{ m.debut ?? '—' }}</strong></div>
+          <div><span>dateFin</span><strong class="mono">{{ m.fin ?? '—' }}</strong></div>
+        </div>
+        <dl>
+          <dt>Enregistrée par</dt>
+          <dd>@for (c of m.compteurs; track c) { <span class="badge" [style.--c]="'var(--mesure)'">{{ label(c) }}</span> } @empty { <span class="muted">—</span> }</dd>
+          <dt>Concerne</dt>
+          <dd>
+            @for (c of m.cibles; track c.id + c.via) {
+              <span class="badge" [style.--c]="m.type === 'production' ? 'var(--production)' : 'var(--batiments)'">{{ label(c.id) }}</span>
+              <small class="muted">{{ c.via === 'R5' ? 'déduit par R5 (bâtiment du compteur)' : 'assertion' }}</small>
+            } @empty { <span class="muted">—</span> }
+          </dd>
+          @if (m.historique?.length) {
+            <dt>Historique <small class="mono">rdfs:comment</small></dt>
+            <dd>@for (h of m.historique; track h) { <small>{{ h }}</small> }</dd>
+          }
+        </dl>
+      </div>
+      <footer class="m-foot">
+        <button class="btn del-text" (click)="demanderSuppression('mesure', m)"><app-icon name="trash" [size]="16" /> Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn primary" (click)="mesureForm.set({ mesure: m }); detailMesure.set(null)"><app-icon name="edit" [size]="16" /> Modifier</button>
+      </footer>
+    </div>
+  </div>
+}
+
+@if (confirm(); as c) {
+  <div class="backdrop" (click)="confirm.set(null)">
+    <div class="modal confirm" (click)="$event.stopPropagation()" role="alertdialog">
+      <div class="m-body">
+        <span class="warn"><app-icon name="alert" [size]="22" /></span>
+        <h2>Supprimer « {{ c.label }} » ?</h2>
+        <p>{{ c.message }}</p>
+        @if (c.deps?.length) {
+          <ul class="deps">
+            @for (dep of c.deps; track dep.id + dep.relation) {
+              <li><span class="mono">{{ dep.relation }}</span> · {{ label(dep.id) }}</li>
+            }
+          </ul>
+        }
+      </div>
+      <footer class="m-foot">
+        <button class="btn" (click)="confirm.set(null)">Annuler</button>
+        @if (!c.bloquant) {
+          <button class="btn danger" [disabled]="c.busy" (click)="supprimer(!!c.deps)">
+            {{ c.busy ? 'Suppression…' : c.deps ? 'Supprimer quand même' : 'Supprimer' }}
+          </button>
+        }
+      </footer>
+    </div>
+  </div>
+}

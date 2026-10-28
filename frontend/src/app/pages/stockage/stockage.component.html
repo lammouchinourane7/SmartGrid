@@ -1,0 +1,386 @@
+<div class="page">
+  <!-- ======================================================= en-tête -->
+  <header class="head">
+    <div>
+      <p class="eyebrow">Membre {{ d.numero }} · {{ d.membre }}</p>
+      <h1 class="page-title">{{ d.title }}</h1>
+    </div>
+    <span class="tile"><app-icon name="battery" [size]="34" [stroke]="1.6" /></span>
+  </header>
+
+  <!-- ======================================================= stats -->
+  <section class="stats">
+    @if (stats(); as s) {
+      <article class="card stat">
+        <span class="k">Systèmes de stockage</span>
+        <strong>{{ s.nb }}</strong>
+        <div class="split">
+          @for (f of familleKeys; track f) {
+            @if (s.parFamille[f]?.nb) { <i [style.flex]="s.parFamille[f]!.nb" [style.background]="familles[f].color"></i> }
+          }
+        </div>
+        <span class="legend">
+          @for (f of familleKeys; track f) {
+            @if (s.parFamille[f]?.nb) { <span><b [style.background]="familles[f].color"></b>{{ familles[f].label }} {{ s.parFamille[f]!.nb }}</span> }
+          }
+        </span>
+      </article>
+      <article class="card stat">
+        <span class="k">Capacité totale</span>
+        <strong>{{ kwh(s.capaciteTotale) }}</strong>
+        <span class="legend">SUM(?capacite)</span>
+      </article>
+      <article class="card stat">
+        <span class="k">Énergie disponible</span>
+        <strong>{{ kwh(s.energieDisponible) }}</strong>
+        <div class="gauge" [attr.aria-label]="'Charge moyenne ' + s.chargeMoyenne + ' %'">
+          <i [style.width.%]="s.chargeMoyenne" [style.background]="couleurCharge(s.chargeMoyenne)"></i>
+        </div>
+        <span class="legend">charge moyenne {{ s.chargeMoyenne }} % · AVG(?niveau)</span>
+      </article>
+      <article class="card stat">
+        <span class="k">Classes déduites (≡)</span>
+        <div class="deduites">
+          @for (k of definieKeys; track k) {
+            <button class="ded" [style.--c]="definies[k].color" (click)="filtrerDefinie(k)" [title]="definies[k].axiome">
+              <b>{{ s.parClasseDefinie[definies[k].classe] }}</b> {{ definies[k].label }}
+            </button>
+          }
+        </div>
+      </article>
+    } @else {
+      @for (i of [1, 2, 3, 4]; track i) {
+        <article class="card stat">
+          <span class="skeleton" style="width: 60%; height: 12px"></span>
+          <span class="skeleton" style="width: 40%; height: 34px; margin-top: 6px"></span>
+          <span class="skeleton" style="width: 80%; height: 10px; margin-top: 6px"></span>
+        </article>
+      }
+    }
+  </section>
+
+  <!-- ======================================================= onglets -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" [attr.aria-selected]="tab() === 'systemes'" [class.on]="tab() === 'systemes'" (click)="setTab('systemes')">
+      <app-icon name="table" [size]="16" /> Systèmes
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'batiments'" [class.on]="tab() === 'batiments'" (click)="setTab('batiments')">
+      <app-icon name="building" [size]="16" /> Bâtiments autonomes
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'scenario'" [class.on]="tab() === 'scenario'" (click)="setTab('scenario')">
+      <app-icon name="alert" [size]="16" /> Scénario coupure
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'question'" [class.on]="tab() === 'question'" (click)="setTab('question')">
+      <app-icon name="code" [size]="16" /> Question (NLP)
+    </button>
+  </nav>
+
+  <!-- ======================================================= SYSTÈMES -->
+  @if (tab() === 'systemes') {
+    <section class="card panel">
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Nom, identifiant, technologie…" [value]="q()" (input)="search($any($event.target).value)">
+        </label>
+
+        <div class="seg" role="radiogroup" aria-label="Famille">
+          <button [class.on]="famille() === ''" (click)="setFamille('')">Tous</button>
+          @for (f of familleKeys; track f) {
+            <button [class.on]="famille() === f" (click)="setFamille(f)">{{ familles[f].label }}</button>
+          }
+        </div>
+
+        <input class="input small-num" type="number" min="0" max="100" placeholder="Charge ≤ %" aria-label="Charge maximale"
+               [value]="niveauMax() ?? ''" (input)="setNiveauMax($any($event.target).value)">
+
+        <select class="input" [value]="source()" (change)="setSource($any($event.target).value)" aria-label="Filtrer par source">
+          <option value="">Toutes les sources</option>
+          @for (s of options()?.sources ?? []; track s.id) { <option [value]="s.id">{{ s.renouvelable ? '♻ ' : '' }}{{ s.label }}</option> }
+        </select>
+
+        <select class="input" [value]="poste()" (change)="setPoste($any($event.target).value)" aria-label="Filtrer par poste">
+          <option value="">Tous les postes</option>
+          @for (p of options()?.postes ?? []; track p.id) { <option [value]="p.id">{{ p.label }}</option> }
+        </select>
+
+        @if (filtresActifs()) {
+          <button class="btn ghost" (click)="resetFiltres()">Réinitialiser</button>
+        }
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="form.set({ systeme: null })">
+          <app-icon name="plus" [size]="16" /> Nouveau stockage
+        </button>
+      </div>
+
+      <div class="chips-row" aria-label="Classes définies">
+        <span class="hint">Classe définie :</span>
+        @for (k of definieKeys; track k) {
+          <button class="dchip" [class.on]="definie() === k" [style.--c]="definies[k].color" (click)="setDefinie(k)" [title]="definies[k].axiome">
+            {{ definies[k].classe }}
+          </button>
+        }
+      </div>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Système · classe</th><th class="num">Capacité</th><th>Charge · disponible</th>
+              <th>Stocke l'énergie de</th><th>Alimente</th><th>Classes déduites</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (systemes(); as list) {
+              @for (s of list; track s.id) {
+                <tr class="clickable" (click)="ouvrirDetail(s)">
+                  <td>
+                    <div class="name">{{ s.label }}</div>
+                    <div class="sub">
+                      <span class="badge" [style.--c]="familles[s.famille].color">{{ s.classe }}</span>
+                      <span class="id mono">sg:{{ s.id }}</span>
+                    </div>
+                  </td>
+                  <td class="num mono">{{ kwh(s.capacite) }}</td>
+                  <td>
+                    @if (s.niveau != null) {
+                      <div class="charge">
+                        <div class="gauge"><i [style.width.%]="s.niveau" [style.background]="couleurCharge(s.niveau)"></i></div>
+                        <span class="mono" [style.color]="couleurCharge(s.niveau)">{{ s.niveau }} %</span>
+                      </div>
+                      <div class="id mono">
+                        {{ kwh(s.energie) }}@if (s.autonomie != null) { · {{ h(s.autonomie) }} à {{ kw(s.puissance) }} }
+                      </div>
+                    } @else { <span class="muted">—</span> }
+                  </td>
+                  <td>
+                    <div class="tags">
+                      @for (x of s.sources; track x) { <span class="badge" [style.--c]="'var(--production)'">{{ label(x) }}</span> }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="tags">
+                      @for (b of s.batiments; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> }
+                      @empty { <span class="muted">—</span> }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="tags">
+                      @for (c of s.classesDeduites; track c) {
+                        <span class="badge" [style.--c]="definies[definieParClasse[c]].color" [title]="definies[definieParClasse[c]].axiome">{{ definies[definieParClasse[c]].label }}</span>
+                      } @empty { <span class="muted">—</span> }
+                    </div>
+                  </td>
+                  <td class="actions" (click)="$event.stopPropagation()">
+                    <button class="btn icon ghost" title="Modifier" (click)="form.set({ systeme: s })"><app-icon name="edit" [size]="16" /></button>
+                    <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression(s)"><app-icon name="trash" [size]="16" /></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="empty">
+                  {{ filtresActifs() ? 'Aucun stockage ne correspond à ces filtres.' : "Aucun stockage dans l'ontologie." }}
+                </td></tr>
+              }
+            } @else {
+              @for (i of skeletonRows; track i) {
+                <tr>
+                  <td><span class="skeleton" style="width: 170px; height: 14px"></span><span class="skeleton" style="width: 120px; height: 10px; margin-top: 6px"></span></td>
+                  <td><span class="skeleton" style="width: 60px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 130px; height: 10px"></span></td>
+                  <td><span class="skeleton" style="width: 120px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 90px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 70px; height: 20px; border-radius: 99px"></span></td>
+                  <td></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= BÂTIMENTS -->
+  @if (tab() === 'batiments') {
+    <section class="panel-plain">
+      <p class="explain card">
+        <app-icon name="check" [size]="18" />
+        <span>
+          <strong class="mono">BatimentAutonome ≡ Batiment ⊓ estAlimentePar some SourceRenouvelable ⊓ possedeStockage some SystemeStockage</strong>
+          <br>possedeStockage est déduit par <b>R2</b> ; l'alimentation renouvelable vient d'un lien direct, de l'inverse
+          <span class="mono">produitEnergiePour</span>, de <b>R1</b> (ligne) ou de la nouvelle règle <b>R6</b> (via le stockage).
+        </span>
+      </p>
+      <div class="bats">
+        @if (batiments(); as list) {
+          @for (b of list; track b.id) {
+            <article class="card bat" [class.ok]="b.autonome">
+              <header>
+                <span class="ptile"><app-icon name="building" [size]="20" /></span>
+                <div class="grow">
+                  <h3>{{ b.label }}</h3>
+                  <span class="id mono">{{ b.classe }} · sg:{{ b.id }}</span>
+                </div>
+                @if (b.autonome) {
+                  <span class="badge" [style.--c]="'var(--stockage)'"><app-icon name="check" [size]="13" /> Autonome</span>
+                } @else {
+                  <span class="badge">Non autonome</span>
+                }
+              </header>
+              <dl>
+                <dt>possedeStockage <small class="mono">R2</small></dt>
+                <dd>
+                  @for (x of b.stockages; track x) { <span class="badge" [style.--c]="'var(--stockage)'">{{ label(x) }}</span> }
+                  @empty { <span class="miss">aucun stockage</span> }
+                </dd>
+                <dt>Énergie en réserve</dt>
+                <dd class="mono">{{ b.stockages.length ? kwh(b.energie) : '—' }}</dd>
+                <dt>Sources renouvelables</dt>
+                <dd>
+                  @for (s of b.sourcesRenouvelables; track s.id + s.via) {
+                    <span class="badge" [style.--c]="'var(--production)'">{{ label(s.id) }} <small class="mono">{{ viaLabel(s.via) }}</small></span>
+                  } @empty { <span class="miss">aucune</span> }
+                </dd>
+              </dl>
+            </article>
+          }
+        } @else {
+          @for (i of [1, 2, 3]; track i) {
+            <article class="card bat">
+              <span class="skeleton" style="width: 60%; height: 18px"></span>
+              <span class="skeleton" style="width: 100%; height: 80px; margin-top: 8px"></span>
+            </article>
+          }
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= SCÉNARIO -->
+  @if (tab() === 'scenario') {
+    <section class="card panel pad">
+      @if (options(); as o) {
+        <app-stockage-scenario [postes]="o.postes" [labels]="labels()" (applied)="refresh()" />
+      } @else {
+        <span class="skeleton" style="width: 100%; height: 300px"></span>
+      }
+    </section>
+  }
+
+  <!-- ======================================================= NLP -->
+  @if (tab() === 'question') {
+    <section class="card panel pad">
+      <app-stockage-nlp />
+    </section>
+  }
+
+  @if (tab() === 'systemes' || tab() === 'batiments') {
+    <app-sparql-panel [query]="sparql()" />
+  }
+</div>
+
+<!-- ========================================================= modales -->
+@if (form(); as f) {
+  <app-systeme-form [systeme]="f.systeme" [options]="options()!" [batimentsPublics]="batimentsPublics()"
+                    (saved)="onSaved($event)" (closed)="form.set(null)" />
+}
+
+@if (detail(); as dt) {
+  <div class="backdrop" (click)="detail.set(null)">
+    <div class="modal detail" (click)="$event.stopPropagation()" (keydown.escape)="detail.set(null)">
+      <header class="m-head">
+        <div>
+          <p class="eyebrow">{{ dt.item.classe }} · sg:{{ dt.item.id }}</p>
+          <h2>{{ dt.item.label }}</h2>
+        </div>
+        <button class="btn icon ghost" (click)="detail.set(null)" aria-label="Fermer"><app-icon name="close" /></button>
+      </header>
+      <div class="m-body">
+        <div class="facts">
+          <div><span>Capacité</span><strong class="mono">{{ kwh(dt.item.capacite) }}</strong></div>
+          <div><span>Rendement</span><strong class="mono">{{ dt.item.rendement != null ? dt.item.rendement + ' %' : '—' }}</strong></div>
+          <div><span>Puissance</span><strong class="mono">{{ kw(dt.item.puissance) }}</strong></div>
+          <div><span>Autonomie</span><strong class="mono">{{ h(dt.item.autonomie) }}</strong></div>
+          <div><span>Installation</span><strong class="mono">{{ dt.item.annee ?? '—' }}</strong></div>
+          <div><span>Technologie</span><strong>{{ dt.item.technologie ?? '—' }}</strong></div>
+        </div>
+
+        <div class="niveau card-inner">
+          <div class="niveau-head">
+            <span>Niveau de charge <small class="mono">niveauCharge (fonctionnelle)</small></span>
+            <strong class="mono" [style.color]="couleurCharge(niveauEdit())">{{ niveauEdit() }} %</strong>
+          </div>
+          <input type="range" min="0" max="100" step="1" [value]="niveauEdit()" (input)="niveauEdit.set(+$any($event.target).value)"
+                 [style.accent-color]="couleurCharge(niveauEdit())" aria-label="Niveau de charge">
+          <div class="niveau-foot">
+            <span class="hint">
+              @if (niveauEdit() < seuil) { Sera déduit <b>StockageCritique</b> (&lt; {{ seuil }} %) } @else { Au-dessus du seuil critique }
+            </span>
+            <button class="btn primary" [disabled]="niveauBusy() || niveauEdit() === dt.item.niveau" (click)="enregistrerNiveau()">
+              {{ niveauBusy() ? 'Mise à jour…' : 'Mettre à jour (DELETE/INSERT)' }}
+            </button>
+          </div>
+        </div>
+
+        <dl>
+          <dt>Classes déduites</dt>
+          <dd>
+            @for (c of dt.item.classesDeduites; track c) {
+              <span class="badge" [style.--c]="definies[definieParClasse[c]].color" [title]="definies[definieParClasse[c]].axiome">{{ c }}</span>
+            } @empty { <span class="muted">—</span> }
+          </dd>
+          <dt>stockeEnergieDe</dt>
+          <dd>@for (x of dt.item.sources; track x) { <span class="badge" [style.--c]="'var(--production)'">{{ label(x) }}</span> }</dd>
+          <dt>alimente</dt>
+          <dd>@for (b of dt.item.batiments; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> } @empty { <span class="muted">—</span> }</dd>
+          <dt>raccordeAuPoste</dt>
+          <dd>@if (dt.item.poste) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(dt.item.poste) }}</span> } @else { <span class="muted">—</span> }</dd>
+        </dl>
+
+        <details class="triplets">
+          <summary>Triplets RDF de l'individu</summary>
+          @if (dt.triplets; as ts) {
+            <ul class="mono">
+              @for (t of ts; track $index) {
+                <li>
+                  @if (t.sens === 'sortant') { sg:{{ dt.item.id }} <b>sg:{{ t.propriete }}</b> {{ t.valeur }} }
+                  @else { sg:{{ t.valeur }} <b>sg:{{ t.propriete }}</b> sg:{{ dt.item.id }} }
+                </li>
+              }
+            </ul>
+          } @else { <span class="skeleton" style="width: 100%; height: 80px"></span> }
+        </details>
+      </div>
+      <footer class="m-foot">
+        <button class="btn del-text" (click)="demanderSuppression(dt.item)"><app-icon name="trash" [size]="16" /> Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn primary" (click)="form.set({ systeme: dt.item }); detail.set(null)"><app-icon name="edit" [size]="16" /> Modifier</button>
+      </footer>
+    </div>
+  </div>
+}
+
+@if (confirm(); as c) {
+  <div class="backdrop" (click)="confirm.set(null)">
+    <div class="modal confirm" (click)="$event.stopPropagation()" role="alertdialog">
+      <div class="m-body">
+        <span class="warn"><app-icon name="alert" [size]="22" /></span>
+        <h2>Supprimer « {{ c.label }} » ?</h2>
+        <p>{{ c.message }}</p>
+        @if (c.deps?.length) {
+          <ul class="deps">
+            @for (dep of c.deps; track dep.id + dep.relation) {
+              <li><span class="mono">{{ dep.relation }}</span> ← {{ label(dep.id) }}</li>
+            }
+          </ul>
+        }
+      </div>
+      <footer class="m-foot">
+        <button class="btn" (click)="confirm.set(null)">Annuler</button>
+        <button class="btn danger" [disabled]="c.busy" (click)="supprimer(!!c.deps)">
+          {{ c.busy ? 'Suppression…' : c.deps ? 'Supprimer quand même' : 'Supprimer' }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}

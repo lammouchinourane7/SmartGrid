@@ -1,0 +1,353 @@
+<div class="page">
+  <!-- ======================================================= en-tête -->
+  <header class="head">
+    <div>
+      <p class="eyebrow">Membre {{ d.numero }} · {{ d.membre }}</p>
+      <h1 class="page-title">{{ d.title }}</h1>
+    </div>
+    <span class="tile"><app-icon name="pylon" [size]="34" [stroke]="1.6" /></span>
+  </header>
+
+  <!-- ======================================================= stats -->
+  <section class="stats">
+    @if (stats(); as s) {
+      <article class="card stat">
+        <span class="k">Lignes électriques</span>
+        <strong>{{ s.nbLignes }}</strong>
+        <div class="split" [attr.aria-label]="'HT ' + s.parCategorie.HT + ', MT ' + s.parCategorie.MT + ', BT ' + s.parCategorie.BT">
+          @for (c of catKeys; track c) {
+            @if (s.parCategorie[c]) {
+              <i [style.flex]="s.parCategorie[c]" [style.background]="cats[c].color"></i>
+            }
+          }
+        </div>
+        <span class="legend">
+          @for (c of catKeys; track c) { <span><b [style.background]="cats[c].color"></b>{{ c }} {{ s.parCategorie[c] }}</span> }
+        </span>
+      </article>
+      <article class="card stat">
+        <span class="k">Postes électriques</span>
+        <strong>{{ s.nbPostes }}</strong>
+      </article>
+      <article class="card stat">
+        <span class="k">Longueur du réseau</span>
+        <strong>{{ s.longueurTotale.toLocaleString('fr-FR') }} <small>km</small></strong>
+      </article>
+      <article class="card stat">
+        <span class="k">Tension maximale</span>
+        <strong>{{ s.tensionMax.toLocaleString('fr-FR') }} <small>kV</small></strong>
+      </article>
+    } @else {
+      @for (i of [1, 2, 3, 4]; track i) {
+        <article class="card stat">
+          <span class="skeleton" style="width: 60%; height: 12px"></span>
+          <span class="skeleton" style="width: 40%; height: 34px; margin-top: 6px"></span>
+          <span class="skeleton" style="width: 80%; height: 10px; margin-top: 6px"></span>
+        </article>
+      }
+    }
+  </section>
+
+  <!-- ======================================================= onglets -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" [attr.aria-selected]="tab() === 'lignes'" [class.on]="tab() === 'lignes'" (click)="setTab('lignes')">
+      <app-icon name="table" [size]="16" /> Lignes
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'postes'" [class.on]="tab() === 'postes'" (click)="setTab('postes')">
+      <app-icon name="pylon" [size]="16" /> Postes
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'graphe'" [class.on]="tab() === 'graphe'" (click)="setTab('graphe')">
+      <app-icon name="graph" [size]="16" /> Graphe du réseau
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'question'" [class.on]="tab() === 'question'" (click)="setTab('question')">
+      <app-icon name="code" [size]="16" /> Question (NLP)
+    </button>
+  </nav>
+
+  <!-- ======================================================= LIGNES -->
+  @if (tab() === 'lignes') {
+    <section class="card panel">
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Rechercher une ligne…" [value]="q()" (input)="search($any($event.target).value)">
+        </label>
+
+        <div class="seg" role="radiogroup" aria-label="Catégorie déduite">
+          <button [class.on]="categorie() === ''" (click)="setCategorie('')">Toutes</button>
+          @for (c of catKeys; track c) {
+            <button [class.on]="categorie() === c" (click)="setCategorie(c)" [title]="cats[c].classe">{{ c }}</button>
+          }
+        </div>
+
+        <div class="range">
+          <input class="input" type="number" min="0" placeholder="kV min" aria-label="Tension minimale"
+                 [value]="tensionMin() ?? ''" (input)="setTension('min', $any($event.target).value)">
+          <span>–</span>
+          <input class="input" type="number" min="0" placeholder="kV max" aria-label="Tension maximale"
+                 [value]="tensionMax() ?? ''" (input)="setTension('max', $any($event.target).value)">
+        </div>
+
+        <select class="input" [value]="poste()" (change)="setPoste($any($event.target).value)" aria-label="Filtrer par poste">
+          <option value="">Tous les postes</option>
+          @for (p of options()?.postes ?? []; track p.id) { <option [value]="p.id">{{ p.label }}</option> }
+        </select>
+
+        @if (filtresActifs()) {
+          <button class="btn ghost" (click)="resetFiltres()">Réinitialiser</button>
+        }
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="ligneForm.set({ ligne: null })">
+          <app-icon name="plus" [size]="16" /> Nouvelle ligne
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Ligne</th><th>Classe déduite</th><th class="num">Tension</th><th class="num">Longueur</th>
+              <th>Postes reliés</th><th>Bâtiments desservis</th><th>Gérée par</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (lignes(); as list) {
+              @for (l of list; track l.id) {
+                <tr class="clickable" (click)="ouvrirDetail(l)">
+                  <td>
+                    <div class="name">{{ l.label }}</div>
+                    <div class="id mono">sg:{{ l.id }}</div>
+                  </td>
+                  <td><span class="badge" [style.--c]="cats[l.categorie].color" [title]="cats[l.categorie].axiome">{{ cats[l.categorie].label }}</span></td>
+                  <td class="num mono">{{ l.tension }} kV</td>
+                  <td class="num mono">{{ l.longueur != null ? l.longueur + ' km' : '—' }}</td>
+                  <td>
+                    <div class="tags">
+                      @for (p of l.postes; track p) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(p) }}</span> }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="tags">
+                      @for (b of l.batiments; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> }
+                      @empty { <span class="muted">—</span> }
+                    </div>
+                  </td>
+                  <td>
+                    @for (o of l.gestionnaires; track o) {
+                      <span class="badge" [style.--c]="'var(--mesure)'" title="Déduit par la règle R4">{{ o }} <small class="mono">R4</small></span>
+                    } @empty { <span class="muted">—</span> }
+                  </td>
+                  <td class="actions" (click)="$event.stopPropagation()">
+                    <button class="btn icon ghost" title="Modifier" (click)="ligneForm.set({ ligne: l })"><app-icon name="edit" [size]="16" /></button>
+                    <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression('ligne', l)"><app-icon name="trash" [size]="16" /></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="8" class="empty">
+                  {{ filtresActifs() ? 'Aucune ligne ne correspond à ces filtres.' : "Aucune ligne dans l'ontologie." }}
+                </td></tr>
+              }
+            } @else {
+              @for (i of skeletonRows; track i) {
+                <tr>
+                  <td><span class="skeleton" style="width: 160px; height: 14px"></span><span class="skeleton" style="width: 110px; height: 10px; margin-top: 6px"></span></td>
+                  <td><span class="skeleton" style="width: 90px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 50px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 50px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 100px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 100px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 60px; height: 20px; border-radius: 99px"></span></td>
+                  <td></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= POSTES -->
+  @if (tab() === 'postes') {
+    <section class="panel-plain">
+      <div class="toolbar bare">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Rechercher un poste…" [value]="qPostes()" (input)="searchPostes($any($event.target).value)">
+        </label>
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="posteForm.set({ poste: null })">
+          <app-icon name="plus" [size]="16" /> Nouveau poste
+        </button>
+      </div>
+
+      <div class="postes">
+        @if (postes(); as list) {
+          @for (p of list; track p.id) {
+            <article class="card poste">
+              <header>
+                <span class="ptile"><app-icon name="pylon" [size]="20" /></span>
+                <div class="grow">
+                  <h3>{{ p.label }}</h3>
+                  <span class="id mono">sg:{{ p.id }}</span>
+                </div>
+                <button class="btn icon ghost" title="Modifier" (click)="posteForm.set({ poste: p })"><app-icon name="edit" [size]="16" /></button>
+                <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression('poste', p)"><app-icon name="trash" [size]="16" /></button>
+              </header>
+
+              @if (p.ville || p.capacite != null || p.annee != null) {
+                <div class="facts small">
+                  <div><span>Ville</span><strong>{{ p.ville ?? '—' }}</strong></div>
+                  <div><span>Capacité</span><strong class="mono">{{ p.capacite != null ? p.capacite + ' MVA' : '—' }}</strong></div>
+                  <div><span>Service</span><strong class="mono">{{ p.annee ?? '—' }}</strong></div>
+                </div>
+              }
+
+              <button class="count" (click)="filtrerParPoste(p.id)" [disabled]="!p.nbLignes" title="Voir les lignes de ce poste">
+                <strong>{{ p.nbLignes }}</strong> ligne{{ p.nbLignes > 1 ? 's' : '' }} reliée{{ p.nbLignes > 1 ? 's' : '' }} →
+              </button>
+
+              <dl>
+                <dt>Connecté à <small class="mono">symétrique</small></dt>
+                <dd>
+                  @for (c of p.connexions; track c) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(c) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+                <dt>Secourt</dt>
+                <dd>
+                  @for (c of p.secours; track c) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(c) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+                <dt>Secouru par</dt>
+                <dd>
+                  @for (c of p.secourusPar; track c) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(c) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+                <dt>Géré par</dt>
+                <dd>
+                  @for (o of p.gestionnaires; track o) { <span class="badge" [style.--c]="'var(--mesure)'">{{ o }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+                <dt>Bâtiments desservis <small class="mono">R3</small></dt>
+                <dd>
+                  @for (b of p.batimentsDesservis; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> }
+                  @empty { <span class="muted">—</span> }
+                </dd>
+              </dl>
+            </article>
+          } @empty {
+            <p class="empty card">Aucun poste trouvé.</p>
+          }
+        } @else {
+          @for (i of [1, 2, 3]; track i) {
+            <article class="card poste">
+              <span class="skeleton" style="width: 60%; height: 18px"></span>
+              <span class="skeleton" style="width: 40%; height: 12px"></span>
+              <span class="skeleton" style="width: 100%; height: 70px; margin-top: 8px"></span>
+            </article>
+          }
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ======================================================= GRAPHE -->
+  @if (tab() === 'graphe') {
+    <section class="card panel pad">
+      @if (graphe(); as g) {
+        <app-reseau-graphe [data]="g" />
+      } @else {
+        <span class="skeleton" style="width: 100%; height: 420px"></span>
+      }
+    </section>
+  }
+
+  <!-- ======================================================= NLP -->
+  @if (tab() === 'question') {
+    <section class="card panel pad">
+      <app-reseau-nlp />
+    </section>
+  }
+
+</div>
+
+<!-- ========================================================= modales -->
+@if (ligneForm(); as f) {
+  <app-ligne-form [ligne]="f.ligne" [options]="options()!" (saved)="onSaved('ligne')" (closed)="ligneForm.set(null)" />
+}
+
+@if (posteForm(); as f) {
+  <app-poste-form [poste]="f.poste" [options]="options()!" (saved)="onSaved('poste')" (closed)="posteForm.set(null)" />
+}
+
+@if (detail(); as l) {
+  <div class="backdrop" (click)="detail.set(null)">
+    <div class="modal detail" (click)="$event.stopPropagation()" (keydown.escape)="detail.set(null)">
+      <header class="m-head">
+        <div>
+          <p class="eyebrow">LigneElectrique · sg:{{ l.id }}</p>
+          <h2>{{ l.label }}</h2>
+        </div>
+        <button class="btn icon ghost" (click)="detail.set(null)" aria-label="Fermer"><app-icon name="close" /></button>
+      </header>
+      <div class="m-body">
+        <div class="facts">
+          <div><span>Tension</span><strong class="mono">{{ l.tension }} kV</strong></div>
+          <div><span>Longueur</span><strong class="mono">{{ l.longueur ?? '—' }} km</strong></div>
+          <div><span>Mise en service</span><strong class="mono">{{ l.annee ?? '—' }}</strong></div>
+          <div><span>Classe déduite</span><strong [style.color]="cats[l.categorie].color">{{ cats[l.categorie].classe }}</strong></div>
+        </div>
+        <dl>
+          <dt>relie</dt>
+          <dd>@for (p of l.postes; track p) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(p) }}</span> }</dd>
+          <dt>transporteVers</dt>
+          <dd>@for (b of l.batiments; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> } @empty { <span class="muted">—</span> }</dd>
+          <dt>Sources qui y injectent <small class="mono">injecteDans⁻¹</small></dt>
+          <dd>
+            @if (l.sources) {
+              @for (s of l.sources; track s) { <span class="badge" [style.--c]="'var(--production)'">{{ label(s) }}</span> } @empty { <span class="muted">—</span> }
+            } @else { <span class="skeleton" style="width: 140px; height: 20px"></span> }
+          </dd>
+          <dt>Bâtiments raccordés <small class="mono">estRaccordeA⁻¹</small></dt>
+          <dd>
+            @if (l.batimentsRaccordes) {
+              @for (b of l.batimentsRaccordes; track b) { <span class="badge" [style.--c]="'var(--batiments)'">{{ label(b) }}</span> } @empty { <span class="muted">—</span> }
+            } @else { <span class="skeleton" style="width: 140px; height: 20px"></span> }
+          </dd>
+          <dt>Gérée par <small class="mono">R4</small></dt>
+          <dd>@for (o of l.gestionnaires; track o) { <span class="badge" [style.--c]="'var(--mesure)'">{{ o }}</span> } @empty { <span class="muted">—</span> }</dd>
+        </dl>
+      </div>
+      <footer class="m-foot">
+        <button class="btn del-text" (click)="demanderSuppression('ligne', l)"><app-icon name="trash" [size]="16" /> Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn primary" (click)="ligneForm.set({ ligne: l }); detail.set(null)"><app-icon name="edit" [size]="16" /> Modifier</button>
+      </footer>
+    </div>
+  </div>
+}
+
+@if (confirm(); as c) {
+  <div class="backdrop" (click)="confirm.set(null)">
+    <div class="modal confirm" (click)="$event.stopPropagation()" role="alertdialog">
+      <div class="m-body">
+        <span class="warn"><app-icon name="alert" [size]="22" /></span>
+        <h2>Supprimer « {{ c.label }} » ?</h2>
+        @if (c.deps) { <p>{{ c.message }}</p> }
+        @if (c.deps?.length) {
+          <ul class="deps">
+            @for (dep of c.deps; track dep.id + dep.relation) {
+              <li><span class="mono">{{ dep.relation }}</span> ← {{ label(dep.id) }}</li>
+            }
+          </ul>
+        }
+      </div>
+      <footer class="m-foot">
+        <button class="btn" (click)="confirm.set(null)">Annuler</button>
+        <button class="btn danger" [disabled]="c.busy" (click)="supprimer(!!c.deps)">
+          {{ c.busy ? 'Suppression…' : c.deps ? 'Supprimer quand même' : 'Supprimer' }}
+        </button>
+      </footer>
+    </div>
+  </div>
+}
