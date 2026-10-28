@@ -1,0 +1,203 @@
+/* ===================================================================
+   Design system Smart Grid — reprend l'identité de la présentation.
+   Tous les membres utilisent ces classes et ces variables.
+   =================================================================== */
+
+:root {
+  --navy: #121f2e;
+  --navy-2: #1b2b3d;
+  --bg: #f4f1eb;
+  --card: #fdfbf6;
+  --border: #e5e0d6;
+  --text: #1e2a38;
+  --muted: #6e6a62;
+  --hover: #f0ece3;
+  --shadow: 0 1px 2px rgba(18, 31, 46, .05), 0 6px 20px rgba(18, 31, 46, .06);
+  --shadow-lg: 0 20px 60px rgba(18, 31, 46, .25);
+  --radius: 14px;
+  --radius-sm: 9px;
+
+  /* une couleur par domaine */
+  --production: #e8912d;
+  --stockage: #2e9e6b;
+  --batiments: #3b7fc4;
+  --reseau: #8a5cc9;
+  --mesure: #d9534f;
+
+  --danger: #d9534f;
+  --success: #2e9e6b;
+
+  --font: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --t: 150ms ease;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --navy: #0a131d;
+  --navy-2: #142231;
+  --bg: #0f1923;
+  --card: #16222e;
+  --border: #263546;
+  --text: #ebe7df;
+  --muted: #98a3ae;
+  --hover: #1d2b39;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+  --production: #f0a04a;
+  --stockage: #3fb682;
+  --batiments: #5b9ad8;
+  --reseau: #a57ee0;
+  --mesure: #e36f6b;
+  --danger: #e36f6b;
+  --success: #3fb682;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--t), color var(--t);
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+code, pre, .mono { font-family: var(--mono); }
+
+/* ---------- typographie « slides » ---------- */
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent, var(--production));
+}
+.page-title {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+.page-sub { margin: 8px 0 0; color: var(--muted); max-width: 70ch; }
+
+/* ---------- cartes ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: background var(--t), border-color var(--t), box-shadow var(--t), transform var(--t);
+}
+
+/* ---------- boutons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-weight: 600; font-size: 13.5px;
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t), color var(--t), opacity var(--t);
+  white-space: nowrap;
+  &:hover { background: var(--hover); }
+  &:disabled { opacity: .55; cursor: not-allowed; }
+  &.primary {
+    background: var(--accent, var(--navy)); border-color: transparent; color: #fff;
+    &:hover { filter: brightness(1.08); }
+  }
+  &.danger { background: var(--danger); border-color: transparent; color: #fff; }
+  &.ghost { background: transparent; border-color: transparent; }
+  &.icon { width: 34px; height: 34px; padding: 0; justify-content: center; }
+}
+
+/* ---------- badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  color: var(--c, var(--muted));
+  background: color-mix(in srgb, var(--c, var(--muted)) 14%, transparent);
+  white-space: nowrap;
+}
+
+/* ---------- formulaires ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.input {
+  height: 38px; padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  outline: none;
+  transition: border-color var(--t), box-shadow var(--t), background var(--t);
+  &:focus {
+    border-color: var(--accent, var(--batiments));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, var(--batiments)) 20%, transparent);
+  }
+  &:disabled { opacity: .65; }
+}
+.hint { font-size: 12px; color: var(--muted); }
+
+/* ---------- tableaux ---------- */
+.table-wrap { overflow-x: auto; }
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  th {
+    text-align: left; font-size: 11.5px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr { transition: background var(--t); }
+  tbody tr:hover { background: var(--hover); }
+  tbody tr:last-child td { border-bottom: none; }
+}
+
+/* ---------- skeleton ---------- */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--hover) 25%, var(--border) 50%, var(--hover) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---------- modales ---------- */
+.backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(10, 19, 29, .55);
+  display: grid; place-items: center;
+  padding: 16px;
+  animation: fade 150ms ease;
+}
+.modal {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  animation: pop 150ms ease;
+}
+@keyframes fade { from { opacity: 0; } }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
