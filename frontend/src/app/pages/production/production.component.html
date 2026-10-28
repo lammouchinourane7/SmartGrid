@@ -1,0 +1,308 @@
+<div class="page">
+  <!-- ======================================================= en-tête -->
+  <header class="head">
+    <div>
+      <p class="eyebrow">Membre {{ d.numero }} · {{ d.membre }}</p>
+      <h1 class="page-title">{{ d.title }}</h1>
+      <p class="page-sub">{{ d.description }}</p>
+    </div>
+    <span class="tile"><app-icon name="sun" [size]="34" [stroke]="1.6" /></span>
+  </header>
+
+  <!-- ======================================================= indicateurs -->
+  <section class="stats">
+    @if (stats(); as s) {
+      <article class="card stat">
+        <span class="k">Sources d'énergie</span>
+        <strong>{{ s.nbSources }}</strong>
+        <div class="split">
+          @if (s.nbRenouvelables) { <i [style.flex]="s.nbRenouvelables" [style.background]="familles.renouvelable.color"></i> }
+          @if (s.nbNonRenouvelables) { <i [style.flex]="s.nbNonRenouvelables" [style.background]="familles.non_renouvelable.color"></i> }
+          @if (s.nbSources - s.nbRenouvelables - s.nbNonRenouvelables) {
+            <i [style.flex]="s.nbSources - s.nbRenouvelables - s.nbNonRenouvelables" [style.background]="familles.non_classee.color"></i>
+          }
+        </div>
+        <span class="legend">
+          <span><b [style.background]="familles.renouvelable.color"></b>Renouvelables {{ s.nbRenouvelables }}</span>
+          <span><b [style.background]="familles.non_renouvelable.color"></b>Non renouvelables {{ s.nbNonRenouvelables }}</span>
+        </span>
+      </article>
+      <article class="card stat">
+        <span class="k">Puissance installée totale</span>
+        <strong>{{ (s.puissanceTotaleKW / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) }} <small>MW</small></strong>
+        <span class="legend">
+          {{ fmtKW(s.puissanceTotaleKW) }} · {{ s.nbAvecPuissance }} source(s) renseignée(s)
+          @if (s.nbSansPuissance) { · <b class="warn-text">{{ s.nbSansPuissance }} sans puissance (non comptée)</b> }
+        </span>
+      </article>
+      <article class="card stat">
+        <span class="k">Énergie mesurée (mesures de production)</span>
+        <strong>{{ s.energieMesuree.totalKWh.toLocaleString('fr-FR') }} <small>kWh</small></strong>
+        <span class="legend">
+          @if (s.energieMesuree.nbMesures) {
+            {{ s.energieMesuree.nbMesures }} mesure(s), {{ fmtDate(s.energieMesuree.debut) }} → {{ fmtDate(s.energieMesuree.fin) }}
+          } @else { aucune mesure de production }
+        </span>
+      </article>
+    } @else {
+      @for (i of [1, 2, 3]; track i) {
+        <article class="card stat">
+          <span class="skeleton" style="width: 60%; height: 12px"></span>
+          <span class="skeleton" style="width: 40%; height: 34px; margin-top: 6px"></span>
+        </article>
+      }
+    }
+  </section>
+
+  <!-- ======================================================= onglets -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" [attr.aria-selected]="tab() === 'sources'" [class.on]="tab() === 'sources'" (click)="setTab('sources')">
+      <app-icon name="table" [size]="16" /> Sources
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'tableau'" [class.on]="tab() === 'tableau'" (click)="setTab('tableau')">
+      <app-icon name="graph" [size]="16" /> Tableau de bord
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'question'" [class.on]="tab() === 'question'" (click)="setTab('question')">
+      <app-icon name="code" [size]="16" /> Question (NLP)
+    </button>
+  </nav>
+
+  <!-- ======================================================= SOURCES -->
+  @if (tab() === 'sources') {
+    <section class="card panel">
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input class="input" placeholder="Nom, libellé ou URI…" [value]="q()" (input)="rechercher($any($event.target).value)">
+        </label>
+        <div class="seg" role="radiogroup" aria-label="Catégorie">
+          @for (c of categories; track c.key) {
+            <button [class.on]="categorie() === c.key" (click)="setCategorie(c.key)">{{ c.label }}</button>
+          }
+        </div>
+      </div>
+      <div class="toolbar second">
+        <div class="range">
+          <input class="input" type="number" min="0" placeholder="kW min" aria-label="Puissance minimale (kW)"
+                 [value]="puissanceMin() ?? ''" (input)="setPuissance('min', $any($event.target).value)">
+          <span>–</span>
+          <input class="input" type="number" min="0" placeholder="kW max" aria-label="Puissance maximale (kW)"
+                 [value]="puissanceMax() ?? ''" (input)="setPuissance('max', $any($event.target).value)">
+        </div>
+        <label class="check">
+          <input type="checkbox" [checked]="sansPuissance()" (change)="sansPuissance.set($any($event.target).checked); loadSources()">
+          Sans puissance renseignée
+        </label>
+        <div class="range dates">
+          <input class="input" type="date" aria-label="Mise en service après le" [value]="dateMin()"
+                 (change)="dateMin.set($any($event.target).value); loadSources()">
+          <span>→</span>
+          <input class="input" type="date" aria-label="Mise en service avant le" [value]="dateMax()"
+                 (change)="dateMax.set($any($event.target).value); loadSources()">
+        </div>
+        @if (filtresActifs()) { <button class="btn ghost" (click)="resetFiltres()">Réinitialiser</button> }
+        <span class="spacer"></span>
+        <button class="btn primary" [disabled]="!options()" (click)="form.set({ source: null })">
+          <app-icon name="plus" [size]="16" /> Nouvelle source
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>Source</th><th>Type</th><th class="num">Puissance</th><th>Mise en service</th><th>Injecte dans</th>
+              <th class="num">Bâtiments alimentés</th><th></th></tr>
+          </thead>
+          <tbody>
+            @if (sources(); as list) {
+              @for (s of list; track s.id) {
+                <tr class="clickable" (click)="ouvrirDetail(s)">
+                  <td><div class="name">{{ s.label }}</div><div class="id mono">sg:{{ s.id }}</div></td>
+                  <td>
+                    <span class="badge" [style.--c]="typeColor(s.type)" [title]="familles[s.famille].label">{{ typeLabel(s.type) }}</span>
+                    @if (!s.type) { <small class="warn-text" [title]="s.types.join(', ')">{{ s.types.length }} types</small> }
+                  </td>
+                  <td class="num mono" [class.muted]="s.puissance == null">{{ fmtKW(s.puissance) }}</td>
+                  <td class="mono">{{ fmtDate(s.date) }}</td>
+                  <td>
+                    <div class="tags">
+                      @for (l of s.lignes; track l) { <span class="badge" [style.--c]="'var(--reseau)'">{{ label(l) }}</span> }
+                      @empty { <span class="muted">—</span> }
+                    </div>
+                  </td>
+                  <td class="num mono">{{ s.nbBatiments }}</td>
+                  <td class="actions" (click)="$event.stopPropagation()">
+                    <button class="btn icon ghost" title="Modifier" (click)="modifier(s)"><app-icon name="edit" [size]="16" /></button>
+                    <button class="btn icon ghost del" title="Supprimer" (click)="demanderSuppression(s)"><app-icon name="trash" [size]="16" /></button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="empty">
+                  {{ filtresActifs() ? 'Aucune source ne correspond à ces filtres.' : "Aucune source dans l'ontologie." }}
+                </td></tr>
+              }
+            } @else {
+              @for (i of skeletonRows; track i) {
+                <tr>
+                  <td><span class="skeleton" style="width: 170px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 80px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 70px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 70px; height: 14px"></span></td>
+                  <td><span class="skeleton" style="width: 110px; height: 20px; border-radius: 99px"></span></td>
+                  <td><span class="skeleton" style="width: 20px; height: 14px"></span></td>
+                  <td></td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="rule">« Bâtiments alimentés » compte les liens directs et déduits (R1, R7, R6), recalculés sur le graphe courant.</p>
+    </section>
+  }
+
+  <!-- ======================================================= TABLEAU DE BORD -->
+  @if (tab() === 'tableau') {
+    <section class="card panel pad board">
+      @if (stats(); as s) {
+        <h3 class="sub">Répartition par type (classe la plus précise)</h3>
+        <div class="bars">
+          @for (t of s.parType; track t.type) {
+            <div class="bar-row" [style.--c]="typeColor(t.type)">
+              <span class="bl">{{ typeLabel(t.type) }} <small class="muted">· {{ t.nb }} source(s)</small></span>
+              <span class="bt"><i [style.width.%]="100 * t.puissanceKW / maxType()"></i></span>
+              <span class="bv mono">{{ fmtKW(t.puissanceKW) }}
+                @if (t.nb > t.nbAvecPuissance) { <small class="warn-text">({{ t.nb - t.nbAvecPuissance }} sans puissance)</small> }
+              </span>
+            </div>
+          } @empty { <p class="muted">Aucune source.</p> }
+        </div>
+
+        <h3 class="sub">Puissance installée ≠ énergie produite</h3>
+        <div class="facts">
+          <div><span>Puissance installée totale (kW)</span><strong class="mono">{{ fmtKW(s.puissanceTotaleKW) }}</strong></div>
+          <div><span>Sources sans puissance renseignée</span><strong class="mono">{{ s.nbSansPuissance }}</strong></div>
+          <div><span>Énergie mesurée (kWh)</span><strong class="mono">{{ fmtKWh(s.energieMesuree.totalKWh) }}</strong></div>
+          <div><span>Période des mesures</span><strong class="mono">{{ fmtDate(s.energieMesuree.debut) }} → {{ fmtDate(s.energieMesuree.fin) }}</strong></div>
+        </div>
+        <p class="rule"><app-icon name="alert" [size]="14" /> {{ s.energieMesuree.regle }}</p>
+        @if (s.energieMesuree.chevauchements.length) {
+          <p class="rule warn-text">Des mesures d'une même source se chevauchent : leur somme peut compter deux fois la même énergie.</p>
+        }
+      } @else {
+        <span class="skeleton" style="width: 100%; height: 220px"></span>
+      }
+    </section>
+  }
+
+  <!-- ======================================================= NLP -->
+  @if (tab() === 'question') {
+    <section class="card panel pad">
+      <app-production-nlp />
+    </section>
+  } @else {
+    <app-sparql-panel [query]="sparql()" />
+  }
+</div>
+
+<!-- ========================================================= modales -->
+@if (form(); as f) {
+  <app-source-form [source]="f.source" [options]="options()!" (saved)="onSaved(!!f.source)" (closed)="form.set(null)" />
+}
+
+@if (detail(); as s) {
+  <div class="backdrop" (click)="detail.set(null)">
+    <div class="modal detail" (click)="$event.stopPropagation()" (keydown.escape)="detail.set(null)">
+      <header class="m-head">
+        <div>
+          <p class="eyebrow">{{ s.type ?? s.types.join(' + ') }} · sg:{{ s.id }}</p>
+          <h2>{{ s.label }}</h2>
+        </div>
+        <button class="btn icon ghost" (click)="detail.set(null)" aria-label="Fermer"><app-icon name="close" /></button>
+      </header>
+      <div class="m-body">
+        <div class="facts">
+          <div><span>Famille</span><strong [style.color]="familles[s.famille].color">{{ familles[s.famille].label }}</strong></div>
+          <div><span>puissanceInstallee</span><strong class="mono">{{ fmtKW(s.puissance) }}</strong></div>
+          <div><span>dateMiseEnService</span><strong class="mono">{{ fmtDate(s.date) }}</strong></div>
+        </div>
+
+        <p class="eyebrow">Bâtiments alimentés</p>
+        @if (s.alimentation; as alim) {
+          <ul class="chemins">
+            @for (a of alim; track a.batiment) {
+              <li>
+                <strong>{{ label(a.batiment) }}</strong>
+                @for (c of a.chemins; track c.via + (c.par ?? '')) {
+                  <div class="chemin" [class.deduit]="via[c.via].deduit">
+                    <span class="mono">{{ s.id }} → {{ c.par ? label(c.par) + ' → ' : '' }}{{ a.batiment }}</span>
+                    <span class="badge" [style.--c]="via[c.via].deduit ? 'var(--reseau)' : 'var(--batiments)'">{{ via[c.via].label }}</span>
+                    <small class="muted">{{ c.origine }}</small>
+                  </div>
+                }
+              </li>
+            } @empty { <li class="muted">Aucun bâtiment alimenté.</li> }
+          </ul>
+        } @else { <span class="skeleton" style="width: 100%; height: 60px"></span> }
+
+        @if (s.liens; as l) {
+          <dl>
+            <dt>Lignes d'injection</dt>
+            <dd>@for (x of l.lignes; track x.id) { <span class="badge" [style.--c]="'var(--reseau)'">{{ x.label }}{{ x.tension != null ? ' · ' + x.tension + ' kV' : '' }}</span> } @empty { <span class="muted">—</span> }</dd>
+            <dt>Stockages <small class="mono">stockeEnergieDe</small></dt>
+            <dd>@for (x of l.stockages; track x.id) { <span class="badge" [style.--c]="'var(--stockage)'">{{ x.label }}</span> } @empty { <span class="muted">—</span> }</dd>
+            <dt>Mesures de production <small class="mono">concerne</small></dt>
+            <dd>
+              @for (x of l.mesures; track x.id) {
+                <span class="badge" [style.--c]="'var(--mesure)'">{{ fmtKWh(x.valeurKWh) }} · {{ fmtDate(x.debut) }} → {{ fmtDate(x.fin) }}</span>
+              } @empty { <span class="muted">—</span> }
+            </dd>
+          </dl>
+          <p class="rule">Lecture seule : ces liens appartiennent aux modules Réseau, Stockage et Mesure.</p>
+        }
+      </div>
+      <footer class="m-foot">
+        <button class="btn del-text" (click)="demanderSuppression(s)"><app-icon name="trash" [size]="16" /> Supprimer</button>
+        <span class="spacer"></span>
+        <button class="btn primary" (click)="modifier(s)"><app-icon name="edit" [size]="16" /> Modifier</button>
+      </footer>
+    </div>
+  </div>
+}
+
+@if (confirm(); as c) {
+  <div class="backdrop" (click)="confirm.set(null)">
+    <div class="modal confirm" (click)="$event.stopPropagation()" role="alertdialog">
+      <div class="m-body">
+        <span class="warn"><app-icon name="alert" [size]="22" /></span>
+        <h2>Supprimer « {{ c.source.label }} » ?</h2>
+        @if (c.erreur) { <p>{{ c.erreur }}</p> }
+        @if (c.deps; as deps) {
+          @if (deps.bloquantes.length) {
+            <p>Suppression impossible : d'autres modules font référence à cette source. Retirez d'abord ces liens dans leurs modules.</p>
+            <ul class="deps">
+              @for (dep of deps.bloquantes; track dep.id + dep.relation) {
+                <li><span class="mono">{{ dep.sens === 'entrante' ? label(dep.id) + ' ' + dep.relation + ' → source' : 'source ' + dep.relation + ' → ' + label(dep.id) }}</span></li>
+              }
+            </ul>
+          } @else {
+            <p>La source et ses propres triplets seront retirés du graphe RDF :</p>
+            <ul class="deps">
+              @for (dep of deps.supprimees; track dep.id + dep.relation) { <li><span class="mono">{{ dep.relation }}</span> → {{ label(dep.id) }}</li> }
+              @empty { <li class="muted">aucun lien sortant</li> }
+            </ul>
+            <p class="small">Aucun bâtiment ni aucune ligne n'est supprimé.</p>
+          }
+        } @else if (!c.erreur) {
+          <span class="skeleton" style="width: 100%; height: 50px"></span>
+        }
+      </div>
+      <footer class="m-foot">
+        <button class="btn" (click)="confirm.set(null)">Annuler</button>
+        @if (c.deps && !c.deps.bloquantes.length) {
+          <button class="btn danger" [disabled]="c.busy" (click)="supprimer()">{{ c.busy ? 'Suppression…' : 'Supprimer' }}</button>
+        }
+      </footer>
+    </div>
+  </div>
+}

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Copie de travail de l'ontologie (recréée au lancement à partir de SmartGrid-1.owl)
+backend/data/
+
+# Sauvegardes locales de l'ontologie
+backups/
+
+# Éditeurs / système
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
